@@ -24,6 +24,8 @@ There's a trick, though. The path to the file has to be the directory and the fi
 	% env TIMEZONES_1970=/where/you/put/timezones-1970/combined-shapefile-1970 \
 		hypnotoad geo-timezone
 
+Note that the instructions in [Geo::Location::TimeZoneFinder](https://metacpan.org/pod/Geo::Location::TimeZoneFinder) use a slightly different filename, but the advice is the same.
+
 ## Start the server
 
 Run it as you would any other Mojolicious. `morbo` lets you develop since it reloads when files change:
