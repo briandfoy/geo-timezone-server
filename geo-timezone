@@ -1,0 +1,211 @@
+#!/usr/bin/env perl
+use utf8;
+use v5.36;
+
+use Mojolicious::Lite -signatures;
+my %IANA_TO_ZONE;
+
+get '/' => sub ($c) {
+	my $json = timezones( map { $c->param($_) } qw(lat lon date) );
+	my $status = exists $json->{'errors'} ? 400 : 200;
+
+	$c->render(
+		json   => $json,
+		status => $status,
+		);
+	};
+
+app->start;  # this statement needs to be last
+
+=encoding utf8
+
+=head1 NAME
+
+geo-timezone - add a timezone to a datetime based on geo-coordinates
+
+=head1 SYNOPSIS
+
+Run the server:
+
+	% perl geo-timezone
+
+Access the API:
+
+	% curl http://127.0.0.1:3000?date=2026-03-04+01:56;lat=44.00;lon=-83.789
+
+=head1 DESCRIPTION
+
+I have a project that has local times and geocoordinates, but no timezone
+information. This makes certain date operations problematic. This little API
+takes a local date and geocoordinates and figures out the IANA timezone and
+the offset.
+
+I barely did anything. All the hard work was already done by the
+[Geo::Location::TimeZoneFinder](https://metacpan.org/pod/Geo::Location::TimeZoneFinder)
+Perl module and the
+[evansiroky/timezone-boundary-builder)](https://github.com/evansiroky/timezone-boundary-builder)
+project. I just wrapped a Mojolicious Lite app around it so my other tasks can query it.
+
+The decisions are all based on my particular problem. If they don't work for you,
+it's easy enough to change the response.
+
+=head2 Requests
+
+There's one endpoint, which has no name. It's just the root path:
+
+	% curl "http://127.0.0.1:3000/?date=2026-03-04+01:56&lat=44.00&lon=-83.789"
+
+Mojolicious does not support semicolon parameter separators, so you must
+use the `&` separator, which means that a command-line call needs to quote
+the URL, or go the long way with C<curl>:
+
+	% curl -G \
+		--data-urlencode lat=-83.789 \
+		--data-urlencode lon=44.134 \
+		--data-urlencode "date=2026-03-04 01:56" \
+		http://127.0.0.1:3000
+
+The query takes three parameters:
+
+=over 4
+
+=item * lat - latitude in decimal
+
+=item * lon - longitude in decimal
+
+=item * date - as `YYYY-MM-DD HH::MM`
+
+=back
+
+=head2 Errors
+
+If the date or the geo-coordinates are bad, the response returns a 400 error
+(Bad Request) and a JSON object with an C<errors> array with the error messages.
+
+Here's a longitude with a magnitude over 180:
+
+	% curl -s -v "http://127.0.0.1:3000?date=2026-03-04+01:56&lat=44.00&lon=-283.789"
+	*   Trying 127.0.0.1:3000...
+	* Connected to 127.0.0.1 (127.0.0.1) port 3000
+	> GET /?date=2026-03-04+01:56&lat=44.00&lon=-283.789 HTTP/1.1
+	> Host: 127.0.0.1:3000
+	> User-Agent: curl/8.7.1
+	> Accept: */*
+	>
+	* Request completely sent off
+	< HTTP/1.1 400 Bad Request
+	< Content-Length: 146
+	< Content-Type: application/json;charset=UTF-8
+	< Date: Sun, 07 Jun 2026 11:42:01 GMT
+	< Server: Mojolicious (Perl)
+	<
+	* Connection #0 to host 127.0.0.1 left intact
+	{"errors":["Longitude <-283.789> out-of-range"],"geo":{"latitude":"44.00","longitude":"-283.789"},"input_date":"2026-03-04 01:56","version":"1.0"}
+
+Format the errors:
+
+	% curl -s "http://127.0.0.1:3000?date=2026-03-04+01:56&lat=44.00&lon=-283.789" \
+		| jq -r '.errors[]'
+	Longitude <-283.789> out-of-range
+
+=head1 SOURCE AVAILABILITY
+
+This source is available on GitHub L<https://github.com/briandfoy/geo-timezone-server>,
+where all public activity, including issues, should be.
+
+There are back-up repos:
+
+=over 4
+
+=item * L<https://codeberg.org/briandfoy/geo-timezone-server>
+
+=item * L<https://gitlab.com/briandfoy/geo-timezone-server>
+
+=item * L<https://bitbucket.org/briandfoy/geo-timezone-server>
+
+=back
+
+=head1 LICENSE
+
+This code is available under the Artistic License 2.
+
+=head1 AUTHOR
+
+brian d foy C<< <briandfoy@pobox.com> >>
+
+=head1 COPYRIGHT
+
+Copyright 2018, brian d foy C<< <briandfoy@pobox.com> >>
+
+=cut
+
+sub timezones ($lat, $long, $date ) {
+	state $date_pattern = qr/
+		\A
+		(?<year>   \d\d\d\d)
+			-
+		(?<month>  \d\d    )
+			-
+		(?<day>    \d\d    )
+			\x{20}
+		(?<hour>   \d\d    )
+			:
+		(?<minute> \d\d    )
+		\z
+		/xa;
+
+	state $file_base = '/Users/brian/.ebird-perl/timezones-1970/combined-shapefile-1970';
+	state $finder = do {
+		require Geo::Location::TimeZoneFinder;
+		Geo::Location::TimeZoneFinder->new( file_base => $file_base )
+		};
+	state $tz = do { require Time::Moment; require DateTime::TimeZone; };
+
+	my %hash;
+
+	$hash{'version'} = '1.0';
+	$hash{'geo'}->@{qw(latitude longitude)} = ($lat, $long);
+	$hash{'input_date'} = $date;
+
+	my $input_tm;
+	if( $date =~ /$date_pattern/ ) {
+		$input_tm = Time::Moment->new(
+			year   => $+{'year'},
+			month  => $+{'month'},
+			day    => $+{'day'},
+			hour   => $+{'hour'},
+			minute => $+{'minute'},
+			);
+		}
+	else {
+		push $hash{'errors'}->@*, "Could not parse date <$date>. Expected <YYYY-MM-DD HH:MM>";
+		}
+
+	push $hash{'errors'}->@*, "Latitude <$lat> out-of-range"   if abs($lat)  >  90;
+	push $hash{'errors'}->@*, "Longitude <$long> out-of-range" if abs($long) > 180;
+
+	return \%hash if ref $hash{'errors'} && $hash{'errors'}->@* > 0;
+
+	$hash{'names'} = [ $finder->time_zones_at(
+		latitude  => $lat,
+		longitude => $long,
+		) ];
+
+	my $zone = $IANA_TO_ZONE{ $hash{'names'}[0] } //=
+		DateTime::TimeZone->new(name => $hash{'names'}[0]);
+
+	# important to keep the same time, not the time offset from UTC
+	my $tm_with_offset = $input_tm->with_offset_same_local(
+		$zone->offset_for_datetime($input_tm) / 60 # convert seconds to minutes
+		);
+
+	@hash{qw(date gmtime iso8601 offset)} = map { $tm_with_offset->strftime($_) } (
+		'%Y-%m-%d %H:%M %z',
+		'%s',
+		'%Y%m%dT%H:%M%Z',
+		'%z'
+		);
+
+	\%hash;
+	}
+
