@@ -6,8 +6,6 @@ use Mojolicious::Lite -signatures;
 use Time::Str qw(str2time time2str);
 use Time::Str::TimeZone qw(timezone);
 
-my %IANA_TO_ZONE;
-
 get '/' => sub ($c) {
 	my $hash = timezones( map { $c->param($_) } qw(lat lon date) );
 	my $status = exists $hash->{'errors'} ? 400 : 200;
