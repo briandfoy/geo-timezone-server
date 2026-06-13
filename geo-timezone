@@ -1,16 +1,21 @@
 #!/usr/bin/env perl
 use utf8;
-use v5.36;
-
+use v5.42;
 use Mojolicious::Lite -signatures;
+use Time::Str qw(str2time time2str);
+use Time::Str::TimeZone qw(timezone);
+
 my %IANA_TO_ZONE;
 
 get '/' => sub ($c) {
-	my $json = timezones( map { $c->param($_) } qw(lat lon date) );
-	my $status = exists $json->{'errors'} ? 400 : 200;
+	my $hash = timezones( map { $c->param($_) } qw(lat lon date) );
+	my $status = exists $hash->{'errors'} ? 400 : 200;
+
+	$hash->{'version'} = '1.1';
+	$hash->{'url'} = $c->req->url;
 
 	$c->render(
-		json   => $json,
+		json   => $hash,
 		status => $status,
 		);
 	};
@@ -140,72 +145,36 @@ Copyright 2018, brian d foy C<< <briandfoy@pobox.com> >>
 =cut
 
 sub timezones ($lat, $long, $date ) {
-	state $date_pattern = qr/
-		\A
-		(?<year>   \d\d\d\d)
-			-
-		(?<month>  \d\d    )
-			-
-		(?<day>    \d\d    )
-			\x{20}
-		(?<hour>   \d\d    )
-			:
-		(?<minute> \d\d    )
-		\z
-		/xa;
-
 	state $file_base = '/Users/brian/.ebird-perl/timezones-1970/combined-shapefile-1970';
 	state $finder = do {
 		require Geo::Location::TimeZoneFinder;
 		Geo::Location::TimeZoneFinder->new( file_base => $file_base )
 		};
-	state $tz = do { require Time::Moment; require DateTime::TimeZone; };
 
 	my %hash;
 
-	$hash{'version'} = '1.0';
 	$hash{'geo'}->@{qw(latitude longitude)} = ($lat, $long);
 	$hash{'input_date'} = $date;
-
-	my $input_tm;
-	if( $date =~ /$date_pattern/ ) {
-		$input_tm = Time::Moment->new(
-			year   => $+{'year'},
-			month  => $+{'month'},
-			day    => $+{'day'},
-			hour   => $+{'hour'},
-			minute => $+{'minute'},
-			);
-		}
-	else {
-		push $hash{'errors'}->@*, "Could not parse date <$date>. Expected <YYYY-MM-DD HH:MM>";
-		}
 
 	push $hash{'errors'}->@*, "Latitude <$lat> out-of-range"   if abs($lat)  >  90;
 	push $hash{'errors'}->@*, "Longitude <$long> out-of-range" if abs($long) > 180;
 
-	return \%hash if ref $hash{'errors'} && $hash{'errors'}->@* > 0;
-
-	$hash{'names'} = [ $finder->time_zones_at(
-		latitude  => $lat,
-		longitude => $long,
-		) ];
-
-	my $zone = $IANA_TO_ZONE{ $hash{'names'}[0] } //=
-		DateTime::TimeZone->new(name => $hash{'names'}[0]);
-
-	# important to keep the same time, not the time offset from UTC
-	my $tm_with_offset = $input_tm->with_offset_same_local(
-		$zone->offset_for_datetime($input_tm) / 60 # convert seconds to minutes
-		);
-
-	@hash{qw(date gmtime iso8601 offset)} = map { $tm_with_offset->strftime($_) } (
-		'%Y-%m-%d %H:%M %z',
-		'%s',
-		'%Y%m%dT%H:%M%Z',
-		'%z'
-		);
+	try {
+		$hash{'names'} = [ $finder->time_zones_at(
+			latitude  => $lat,
+			longitude => $long,
+			) ];
+		my $tz = timezone($hash{'names'}[0]);
+		say STDERR "Offset: $hash{'offset'}";
+		$hash{'epoch'} = str2time($hash{'input_date'}, format => 'DateTime', timezone => $tz);
+		@hash{qw(offset dst abbr)} = $tz->type_info_for_local($hash{'epoch'}, gap_policy => 'std');
+		$hash{'dst'} = $hash{'dst'} ? true : false;
+		$hash{'offset'} = sprintf '%+03d:%02d', $hash{'offset'} / 3600, $hash{'offset'} % 60;
+		$hash{'date'} = time2str($hash{'epoch'}, timezone => $tz);
+		}
+	catch ($e) {
+		push $hash{'errors'}->@*, $e;
+		}
 
 	\%hash;
 	}
-
