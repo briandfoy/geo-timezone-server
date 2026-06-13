@@ -165,7 +165,6 @@ sub timezones ($lat, $long, $date ) {
 			longitude => $long,
 			) ];
 		my $tz = timezone($hash{'names'}[0]);
-		say STDERR "Offset: $hash{'offset'}";
 		$hash{'epoch'} = str2time($hash{'input_date'}, format => 'DateTime', timezone => $tz);
 		@hash{qw(offset dst abbr)} = $tz->type_info_for_local($hash{'epoch'}, gap_policy => 'std');
 		$hash{'dst'} = $hash{'dst'} ? true : false;
