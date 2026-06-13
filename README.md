@@ -1,4 +1,4 @@
-## geo-timezine server
+## geo-timezone server
 
 I had a local time and geocoordinates, but I needed the timezone, so here you go.
 
@@ -14,7 +14,7 @@ This needs Perl v5.42, Mojolicious 9, and Time::Str:
 
 Or use the *cpanfile*:
 
-	% cpanfile --installdeps .
+	% cpanm --installdeps .
 
 You need the timezone shape files from [evansiroky/timezone-boundary-builder)](https://github.com/evansiroky/timezone-boundary-builder).
 
@@ -58,9 +58,9 @@ The query takes three parameters:
 
 * lat - latitude in decimal
 * lon - longitude in decimal
-* date - as `YYYY-MM-DD HH::MM`
+* date - as `YYYY-MM-DD HH:MM`
 
-The date is that format because that's the one I need. You can fix that up yourself to do whatever you want.
+The date is in that format because that's the one I need. You can fix that up yourself to do whatever you want.
 
 ## The response
 
