@@ -77,7 +77,7 @@ The query takes three parameters:
 
 =item * lon - longitude in decimal
 
-=item * date - as `YYYY-MM-DD HH::MM`
+=item * date - as `YYYY-MM-DD HH:MM`
 
 =back
 
