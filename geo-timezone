@@ -155,8 +155,10 @@ sub timezones ($lat, $long, $date) {
 	$hash{'geo'}->@{qw(latitude longitude)} = ($lat, $long);
 	$hash{'input_date'} = $date;
 
-	push $hash{'errors'}->@*, "Latitude <$lat> out-of-range"   if abs($lat)  >  90;
-	push $hash{'errors'}->@*, "Longitude <$long> out-of-range" if abs($long) > 180;
+	push $hash{'errors'}->@*, "Latitude <$lat> out-of-range"
+		if ! defined $lat  || $lat !~ m/\A[+-]?\d+(\.\d+)\z/a || abs($lat)  >  90;
+	push $hash{'errors'}->@*, "Longitude <$long> out-of-range"
+		if ! defined $long || $lat !~ m/\A[+-]?\d+(\.\d+)\z/a  || abs($long) > 180;
 
 	try {
 		$hash{'names'} = [ $finder->time_zones_at(
