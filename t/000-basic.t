@@ -53,7 +53,6 @@ subtest 'bad requests' => sub {
 		$t->get_ok( '/' => form => $q )->status_is(400)
 			->json_has('/errors');
 		};
-
 	};
 
 subtest 'New York' => sub {
