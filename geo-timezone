@@ -148,7 +148,7 @@ sub timezones ($lat, $long, $date ) {
 	state $file_base = '/Users/brian/.ebird-perl/timezones-1970/combined-shapefile-1970';
 	state $finder = do {
 		require Geo::Location::TimeZoneFinder;
-		Geo::Location::TimeZoneFinder->new( file_base => $file_base )
+		Geo::Location::TimeZoneFinder->new( file_base => $ENV{'TIMEZONES_1970'} // $default_file_base );
 		};
 
 	my %hash;
