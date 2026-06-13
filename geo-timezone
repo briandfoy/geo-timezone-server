@@ -143,7 +143,7 @@ Copyright 2026, brian d foy C<< <briandfoy@pobox.com> >>
 
 =cut
 
-sub timezones ($lat, $long, $date) {
+sub timezones ($lat //= '', $long //= '', $date //= '') {
 	state $default_file_base = Mojo::File->new(__FILE__)->sibling('timezones-1970/combined-shapefile-1970');
 	state $finder = do {
 		require Geo::Location::TimeZoneFinder;
@@ -156,9 +156,9 @@ sub timezones ($lat, $long, $date) {
 	$hash{'input_date'} = $date;
 
 	push $hash{'errors'}->@*, "Latitude <$lat> out-of-range"
-		if ! defined $lat  || $lat !~ m/\A[+-]?\d+(\.\d+)\z/a || abs($lat)  >  90;
+		if $lat !~ m/\A[+-]?\d+(\.\d+)\z/a || abs($lat)  >  90;
 	push $hash{'errors'}->@*, "Longitude <$long> out-of-range"
-		if ! defined $long || $lat !~ m/\A[+-]?\d+(\.\d+)\z/a  || abs($long) > 180;
+		if $lat !~ m/\A[+-]?\d+(\.\d+)\z/a  || abs($long) > 180;
 
 	try {
 		$hash{'names'} = [ $finder->time_zones_at(
